@@ -1,48 +1,23 @@
-use std::sync::Arc;
+mod model;
 
-use bevy::prelude::*;
+use model::mods::*;
 
-type Effect = dyn Fn(&mut World) + Send + Sync;
+use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 
-#[derive(Clone, Component)]
-struct Mod {
-    effect: Arc<Effect>,
+fn init_mods(world: &mut World) {
+    world.query::<&RangedConfig>().iter(world);
 }
 
-type ModSlot = Option<Mod>;
-
-#[derive(Component)]
-struct ModConfig<const MOD_SLOTS: usize = 4, const ARCANE_SLOTS: usize = 0> {
-    special: ModSlot,
-    mods: [ModSlot; MOD_SLOTS],
-    arcanes: [ModSlot; ARCANE_SLOTS],
-}
-
-type RangedConfig = ModConfig<4, 1>;
-
-fn init_mods(mut commands: Commands) {
-    commands.spawn(Mod {
-        effect: Arc::new(|_| println!("Called!")),
-    });
-}
-
-fn manual_query(world: &mut World) {
-    for (i, _mod) in world.query::<&Mod>().iter(world).enumerate() {
-        println!("manual: {i}");
-    }
-}
-
-fn auto_query(query: Query<&Mod>) {
-    for (i, _mod) in query.iter().enumerate() {
-        println!("auto: {i}");
-    }
+fn print_query(query: Query<&RangedConfig>) {
+    query
+        .par_iter()
+        .for_each(|config| println!("print: {config:?}"))
 }
 
 fn main() {
     App::new()
-        .add_plugins(MinimalPlugins)
-        .add_systems(Startup, init_mods)
-        .add_systems(PostStartup, (manual_query, auto_query))
-        .add_systems(Update, bevy::window::close_on_esc)
+        .add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()))
+        .add_systems(PreStartup, init_mods)
+        .add_systems(PostStartup, print_query)
         .run();
 }
